@@ -23,7 +23,8 @@ WORKDIR ${GOPATH}/src/code.gitea.io/gitea
 
 # Checkout version if set
 RUN if [ -n "${GITEA_VERSION}" ]; then git checkout "${GITEA_VERSION}"; fi \
- && make generate-swagger && make clean-all build
+ && GONOSUMCHECK=* GOFLAGS=-mod=mod make generate-swagger \
+ && make clean-all build
 
 # Begin env-to-ini build
 RUN go build contrib/environment-to-ini/environment-to-ini.go
