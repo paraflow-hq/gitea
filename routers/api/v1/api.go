@@ -1242,6 +1242,7 @@ func Routes() *web.Router {
 				m.Get("/raw/*", context.ReferencesGitRepo(), context.RepoRefForAPI, reqRepoReader(unit.TypeCode), repo.GetRawFile)
 				m.Get("/media/*", context.ReferencesGitRepo(), context.RepoRefForAPI, reqRepoReader(unit.TypeCode), repo.GetRawFileOrLFS)
 				m.Methods("HEAD,GET", "/archive/*", reqRepoReader(unit.TypeCode), repo.GetArchive)
+				m.Get("/code_search", context.ReferencesGitRepo(), reqRepoReader(unit.TypeCode), repo.CodeSearch)
 				m.Combo("/forks").Get(repo.ListForks).
 					Post(reqToken(), reqRepoReader(unit.TypeCode), bind(api.CreateForkOption{}), repo.CreateFork)
 				m.Post("/merge-upstream", reqToken(), mustNotBeArchived, reqRepoWriter(unit.TypeCode), bind(api.MergeUpstreamRequest{}), repo.MergeUpstream)
