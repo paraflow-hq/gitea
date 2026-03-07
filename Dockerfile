@@ -21,9 +21,9 @@ RUN apk --no-cache add \
 COPY . ${GOPATH}/src/code.gitea.io/gitea
 WORKDIR ${GOPATH}/src/code.gitea.io/gitea
 
-# Checkout version if set
+# Checkout version if set and generate swagger + build
 RUN if [ -n "${GITEA_VERSION}" ]; then git checkout "${GITEA_VERSION}"; fi \
- && GONOSUMCHECK=* GOFLAGS=-mod=mod make generate-swagger \
+ && GONOSUMDB='*' GONOSUMCHECK='*' GOFLAGS='-mod=mod' make generate-swagger \
  && make clean-all build
 
 # Begin env-to-ini build
