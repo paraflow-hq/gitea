@@ -6855,6 +6855,70 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/code_search": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Search code in a repository",
+        "operationId": "repoCodeSearch",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "keyword to search",
+            "name": "q",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "page number of results to return (1-based)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "search mode: exact, words, regexp",
+            "name": "search_mode",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/CodeSearchResponse"
+          },
+          "400": {
+            "$ref": "#/responses/invalidTopicsError"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
     "/repos/{owner}/{repo}/collaborators": {
       "get": {
         "produces": [
@@ -22138,6 +22202,59 @@
       },
       "x-go-package": "code.gitea.io/gitea/modules/structs"
     },
+    "CodeSearchResponse": {
+      "description": "CodeSearchResponse represents the response of a code search",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CodeSearchResultFile"
+          },
+          "x-go-name": "Items"
+        },
+        "total_count": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "TotalCount"
+        }
+      },
+      "x-go-package": "code.gitea.io/gitea/modules/structs"
+    },
+    "CodeSearchResultFile": {
+      "description": "CodeSearchResultFile represents a file with matched lines in code search",
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "x-go-name": "Filename"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CodeSearchResultLine"
+          },
+          "x-go-name": "Lines"
+        }
+      },
+      "x-go-package": "code.gitea.io/gitea/modules/structs"
+    },
+    "CodeSearchResultLine": {
+      "description": "CodeSearchResultLine represents a single matched line in code search",
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "x-go-name": "Content"
+        },
+        "line_number": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "LineNumber"
+        }
+      },
+      "x-go-package": "code.gitea.io/gitea/modules/structs"
+    },
     "CombinedStatus": {
       "description": "CombinedStatus holds the combined state of several statuses for a single commit",
       "type": "object",
@@ -29332,6 +29449,12 @@
           "format": "int64",
           "description": "Total commit count"
         }
+      }
+    },
+    "CodeSearchResponse": {
+      "description": "CodeSearchResponse",
+      "schema": {
+        "$ref": "#/definitions/CodeSearchResponse"
       }
     },
     "CombinedStatus": {
