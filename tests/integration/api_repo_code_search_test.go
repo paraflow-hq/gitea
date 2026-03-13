@@ -28,7 +28,7 @@ func TestAPIRepoCodeSearch(t *testing.T) {
 
 	var result api.CodeSearchResponse
 	DecodeJSON(t, resp, &result)
-	assert.Greater(t, result.TotalCount, 0)
+	assert.Positive(t, result.TotalCount)
 	assert.NotEmpty(t, result.Items)
 
 	// Verify result contains README.md
@@ -69,7 +69,7 @@ func TestAPIRepoCodeSearch(t *testing.T) {
 
 	var exactResult api.CodeSearchResponse
 	DecodeJSON(t, resp, &exactResult)
-	assert.Greater(t, exactResult.TotalCount, 0)
+	assert.Positive(t, exactResult.TotalCount)
 
 	// Test unauthenticated access to public repo (repo1 is public)
 	req = NewRequest(t, "GET", "/api/v1/repos/user2/repo1/code_search?q=repo1")
@@ -77,7 +77,7 @@ func TestAPIRepoCodeSearch(t *testing.T) {
 
 	var publicResult api.CodeSearchResponse
 	DecodeJSON(t, resp, &publicResult)
-	assert.Greater(t, publicResult.TotalCount, 0)
+	assert.Positive(t, publicResult.TotalCount)
 
 	// Test access to non-existent repo returns 404
 	req = NewRequest(t, "GET", "/api/v1/repos/user2/nonexistent/code_search?q=test").
@@ -87,7 +87,7 @@ func TestAPIRepoCodeSearch(t *testing.T) {
 	// Test line numbers are positive
 	for _, item := range result.Items {
 		for _, line := range item.Lines {
-			require.Greater(t, line.LineNumber, 0, "line number should be positive")
+			require.Positive(t, line.LineNumber, "line number should be positive")
 		}
 	}
 }

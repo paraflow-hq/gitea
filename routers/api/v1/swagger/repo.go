@@ -7,6 +7,13 @@ import (
 	api "code.gitea.io/gitea/modules/structs"
 )
 
+// CodeSearchResponse
+// swagger:response CodeSearchResponse
+type swaggerResponseCodeSearchResponse struct {
+	// in:body
+	Body api.CodeSearchResponse `json:"body"`
+}
+
 // Repository
 // swagger:response Repository
 type swaggerResponseRepository struct {

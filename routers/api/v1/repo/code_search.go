@@ -10,7 +10,6 @@ import (
 	"code.gitea.io/gitea/modules/git"
 	"code.gitea.io/gitea/modules/indexer"
 	"code.gitea.io/gitea/modules/indexer/code/gitgrep"
-	"code.gitea.io/gitea/modules/setting"
 	api "code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/services/context"
 )
@@ -52,9 +51,7 @@ func CodeSearch(ctx *context.APIContext) {
 	//     type: string
 	// responses:
 	//   "200":
-	//     description: code search results
-	//     schema:
-	//       "$ref": "#/definitions/CodeSearchResponse"
+	//     "$ref": "#/responses/CodeSearchResponse"
 	//   "400":
 	//     "$ref": "#/responses/invalidTopicsError"
 	//   "404":
@@ -72,11 +69,6 @@ func CodeSearch(ctx *context.APIContext) {
 	page := ctx.FormInt("page")
 	if page <= 0 {
 		page = 1
-	}
-
-	limit := ctx.FormInt("limit")
-	if limit <= 0 || limit > setting.UI.RepoSearchPagingNum {
-		limit = setting.UI.RepoSearchPagingNum
 	}
 
 	searchMode := indexer.SearchModeType(ctx.FormString("search_mode"))
