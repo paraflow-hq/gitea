@@ -41,7 +41,7 @@ func (err ErrSHANotFound) Unwrap() error {
 }
 
 // GetTreeBySHA get the GitTreeResponse of a repository using a sha hash.
-func GetTreeBySHA(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository, sha string, page, perPage int, recursive bool) (*api.GitTreeResponse, error) {
+func GetTreeBySHA(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository, sha string, page, perPage int, recursive, withSize bool) (*api.GitTreeResponse, error) {
 	gitTree, err := gitRepo.GetTree(sha)
 	if err != nil || gitTree == nil {
 		return nil, ErrSHANotFound{ // TODO: this error has never been catch outside of this function
@@ -53,7 +53,11 @@ func GetTreeBySHA(ctx context.Context, repo *repo_model.Repository, gitRepo *git
 	tree.URL = repo.APIURL() + "/git/trees/" + url.PathEscape(tree.SHA)
 	var entries git.Entries
 	if recursive {
-		entries, err = gitTree.ListEntriesRecursiveWithSize()
+		if withSize {
+			entries, err = gitTree.ListEntriesRecursiveWithSize()
+		} else {
+			entries, err = gitTree.ListEntriesRecursiveFast()
+		}
 	} else {
 		entries, err = gitTree.ListEntries()
 	}
@@ -99,7 +103,9 @@ func GetTreeBySHA(ctx context.Context, repo *repo_model.Repository, gitRepo *git
 		tree.Entries[i].Path = entries[e].Name()
 		tree.Entries[i].Mode = fmt.Sprintf("%06o", entries[e].Mode())
 		tree.Entries[i].Type = entries[e].Type()
-		tree.Entries[i].Size = entries[e].Size()
+		if withSize {
+			tree.Entries[i].Size = entries[e].Size()
+		}
 		tree.Entries[i].SHA = entries[e].ID.String()
 
 		if entries[e].IsDir() {
