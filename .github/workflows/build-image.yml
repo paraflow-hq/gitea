@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "base/v*"
+      - "perf/*"
   workflow_dispatch:
 
 concurrency:
@@ -31,14 +32,25 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version tag
-        id: version
+      - name: Resolve image tags
+        id: image_tags
         run: |
-          # Extract version from branch name: base/v1.24.7 -> 1.24.7
           BRANCH="${GITHUB_REF_NAME}"
-          VERSION="${BRANCH#base/v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building version: ${VERSION}-custom"
+          SHORT_SHA="${GITHUB_SHA::12}"
+
+          if [[ "${BRANCH}" == base/v* ]]; then
+            VERSION="${BRANCH#base/v}"
+            PRIMARY_TAG="${VERSION}-custom"
+            LATEST_TAG="ghcr.io/${GITHUB_REPOSITORY_OWNER}/gitea:latest"
+          else
+            SAFE_BRANCH="$(echo "${BRANCH}" | tr '/_' '-' | tr -cd '[:alnum:].-')"
+            PRIMARY_TAG="${SAFE_BRANCH}-${SHORT_SHA}"
+            LATEST_TAG=""
+          fi
+
+          echo "primary_tag=${PRIMARY_TAG}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Building image tag: ${PRIMARY_TAG}"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -47,9 +59,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/gitea:${{ steps.version.outputs.version }}-custom
-            ghcr.io/${{ github.repository_owner }}/gitea:latest
+            ghcr.io/${{ github.repository_owner }}/gitea:${{ steps.image_tags.outputs.primary_tag }}
+            ${{ steps.image_tags.outputs.latest_tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=Custom Gitea with code search API
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}-custom
+            org.opencontainers.image.version=${{ steps.image_tags.outputs.primary_tag }}
