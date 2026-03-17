@@ -38,6 +38,11 @@ func GetTree(ctx *context.APIContext) {
 	//   description: show all directories and files
 	//   required: false
 	//   type: boolean
+	// - name: with_size
+	//   in: query
+	//   description: include entry size for blobs. default false when recursive is true, otherwise true
+	//   required: false
+	//   type: boolean
 	// - name: page
 	//   in: query
 	//   description: page number; the 'truncated' field in the response will be true if there are still more items after this page, false if the last page
@@ -61,7 +66,10 @@ func GetTree(ctx *context.APIContext) {
 		ctx.APIError(http.StatusBadRequest, "sha not provided")
 		return
 	}
-	if tree, err := files_service.GetTreeBySHA(ctx, ctx.Repo.Repository, ctx.Repo.GitRepo, sha, ctx.FormInt("page"), ctx.FormInt("per_page"), ctx.FormBool("recursive")); err != nil {
+	recursive := ctx.FormBool("recursive")
+	withSize := ctx.FormOptionalBool("with_size").ValueOrDefault(!recursive)
+
+	if tree, err := files_service.GetTreeBySHA(ctx, ctx.Repo.Repository, ctx.Repo.GitRepo, sha, ctx.FormInt("page"), ctx.FormInt("per_page"), recursive, withSize); err != nil {
 		ctx.APIError(http.StatusBadRequest, err.Error())
 	} else {
 		ctx.SetTotalCountHeader(int64(tree.TotalCount))
