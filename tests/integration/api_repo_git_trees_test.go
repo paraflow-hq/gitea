@@ -45,6 +45,20 @@ func TestAPIReposGitTrees(t *testing.T) {
 	require.Len(t, respGitTree.Entries, 1)
 	assert.Equal(t, "File-WoW", respGitTree.Entries[0].Path)
 
+	resp = MakeRequest(t, NewRequest(t, "GET", "/api/v1/repos/user2/repo1/git/trees/65f1bf27bc3bf70f64657658635e66094edbcb4d?recursive=true"), http.StatusOK)
+	respGitTree = api.GitTreeResponse{}
+	DecodeJSON(t, resp, &respGitTree)
+	require.Len(t, respGitTree.Entries, 1)
+	assert.Equal(t, "README.md", respGitTree.Entries[0].Path)
+	assert.EqualValues(t, 0, respGitTree.Entries[0].Size)
+
+	resp = MakeRequest(t, NewRequest(t, "GET", "/api/v1/repos/user2/repo1/git/trees/65f1bf27bc3bf70f64657658635e66094edbcb4d?recursive=true&with_size=true"), http.StatusOK)
+	respGitTree = api.GitTreeResponse{}
+	DecodeJSON(t, resp, &respGitTree)
+	require.Len(t, respGitTree.Entries, 1)
+	assert.Equal(t, "README.md", respGitTree.Entries[0].Path)
+	assert.EqualValues(t, 30, respGitTree.Entries[0].Size)
+
 	resp = MakeRequest(t, NewRequest(t, "GET", "/api/v1/repos/user2/repo1/git/trees/62fb502a7172d4453f0322a2cc85bddffa57f07a?page=2&per_page=1"), http.StatusOK)
 	respGitTree = api.GitTreeResponse{}
 	DecodeJSON(t, resp, &respGitTree)
