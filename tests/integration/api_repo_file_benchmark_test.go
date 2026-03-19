@@ -55,11 +55,11 @@ func populateRepoFast(t testing.TB, repo *repo_model.Repository, n int) {
 	// Write all N files to a temp dir, then batch-hash them
 	tmpFilesDir := t.TempDir()
 	var pathsList strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range n {
 		dir := filepath.Join(tmpFilesDir, fmt.Sprintf("dir%04d", i/100))
 		_ = os.MkdirAll(dir, 0o755)
 		fpath := filepath.Join(dir, fmt.Sprintf("file-%05d.txt", i))
-		_ = os.WriteFile(fpath, []byte(fmt.Sprintf("content-%d\n", i)), 0o644)
+		_ = os.WriteFile(fpath, fmt.Appendf(nil, "content-%d\n", i), 0o644)
 		pathsList.WriteString(fpath)
 		pathsList.WriteByte('\n')
 	}
@@ -75,7 +75,7 @@ func populateRepoFast(t testing.TB, repo *repo_model.Repository, n int) {
 
 	// Build update-index --index-info input (NUL-delimited)
 	var indexInfo strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range n {
 		treePath := fmt.Sprintf("dir%04d/file-%05d.txt", i/100, i)
 		fmt.Fprintf(&indexInfo, "100644 %s\t%s\000", hashes[i], treePath)
 	}
@@ -91,10 +91,13 @@ func populateRepoFast(t testing.TB, repo *repo_model.Repository, n int) {
 	headCommit := gitRun("rev-parse", "refs/heads/"+headRef)
 
 	cmd = exec.Command("git", "commit-tree", newTree, "-p", headCommit, "-m", fmt.Sprintf("populate %d files", n))
-	cmd.Env = append(env,
+	commitEnv := make([]string, len(env), len(env)+4)
+	copy(commitEnv, env)
+	commitEnv = append(commitEnv,
 		"GIT_AUTHOR_NAME=bench", "GIT_AUTHOR_EMAIL=bench@test.local",
 		"GIT_COMMITTER_NAME=bench", "GIT_COMMITTER_EMAIL=bench@test.local",
 	)
+	cmd.Env = commitEnv
 	commitOut, err := cmd.Output()
 	require.NoError(t, err, "commit-tree failed")
 	newCommit := strings.TrimSpace(string(commitOut))
@@ -136,11 +139,11 @@ func TestCreateFileStageTimings(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== CreateFile Per-Stage Timings (single file add via ChangeRepoFiles internals) ===")
-		fmt.Printf("%-8s  %10s  %10s  %10s  %10s  %10s  %10s  %10s\n",
+		t.Log("")
+		t.Log("=== CreateFile Per-Stage Timings (single file add via ChangeRepoFiles internals) ===")
+		t.Logf("%-8s  %10s  %10s  %10s  %10s  %10s  %10s  %10s",
 			"Files", "Clone", "ReadTree", "Hash+Idx", "WriteTree", "Commit", "Push", "TOTAL")
-		fmt.Printf("%-8s  %10s  %10s  %10s  %10s  %10s  %10s  %10s\n",
+		t.Logf("%-8s  %10s  %10s  %10s  %10s  %10s  %10s  %10s",
 			"--------", "----------", "----------", "----------", "----------", "----------", "----------", "----------")
 
 		for _, n := range fileCounts {
@@ -150,7 +153,7 @@ func TestCreateFileStageTimings(t *testing.T) {
 			// Run the instrumented create-file flow
 			timings := instrumentedCreateFile(t, repo, user, fmt.Sprintf("timing/new-file-%d.txt", n))
 
-			fmt.Printf("%-8d  %8dms  %8dms  %8dms  %8dms  %8dms  %8dms  %8dms\n",
+			t.Logf("%-8d  %8dms  %8dms  %8dms  %8dms  %8dms  %8dms  %8dms",
 				n,
 				timings["clone"].Milliseconds(),
 				timings["read_tree"].Milliseconds(),
@@ -162,10 +165,10 @@ func TestCreateFileStageTimings(t *testing.T) {
 			)
 		}
 
-		fmt.Println()
-		fmt.Println("Key: read-tree and write-tree should grow ~linearly with file count (O(N)).")
-		fmt.Println("     hash+idx and commit should stay ~constant regardless of N.")
-		fmt.Println()
+		t.Log("")
+		t.Log("Key: read-tree and write-tree should grow ~linearly with file count (O(N)).")
+		t.Log("     hash+idx and commit should stay ~constant regardless of N.")
+		t.Log("")
 	})
 }
 
@@ -250,13 +253,13 @@ func TestPushBreakdown(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== Push Phase Breakdown (WARNING: test queue=immediate, sync mode) ===")
-		fmt.Println("Comparing: Gitea push (with hooks) vs bare git push (no hooks)")
-		fmt.Println()
-		fmt.Printf("%-8s  %12s  %12s  %12s  %12s  %12s\n",
+		t.Log("")
+		t.Log("=== Push Phase Breakdown (WARNING: test queue=immediate, sync mode) ===")
+		t.Log("Comparing: Gitea push (with hooks) vs bare git push (no hooks)")
+		t.Log("")
+		t.Logf("%-8s  %12s  %12s  %12s  %12s  %12s",
 			"Files", "GiteaPush", "CPU(Gitea)", "BarePush", "CPU(Bare)", "HookOverhead")
-		fmt.Printf("%-8s  %12s  %12s  %12s  %12s  %12s\n",
+		t.Logf("%-8s  %12s  %12s  %12s  %12s  %12s",
 			"--------", "------------", "------------", "------------", "------------", "------------")
 
 		for _, n := range fileCounts {
@@ -272,7 +275,7 @@ func TestPushBreakdown(t *testing.T) {
 
 			hookOverhead := giteaWall - bareWall
 
-			fmt.Printf("%-8d  %10dms  %10dms  %10dms  %10dms  %10dms\n",
+			t.Logf("%-8d  %10dms  %10dms  %10dms  %10dms  %10dms",
 				n,
 				giteaWall.Milliseconds(),
 				giteaCPU.Milliseconds(),
@@ -282,12 +285,12 @@ func TestPushBreakdown(t *testing.T) {
 			)
 		}
 
-		fmt.Println()
-		fmt.Println("GiteaPush = total wall time of tmpRepo.Push (triggers pre-receive + post-receive hooks)")
-		fmt.Println("BarePush  = direct git push to bare repo with hooks disabled (pure git transfer cost)")
-		fmt.Println("CPU(*)    = process CPU time consumed during that operation")
-		fmt.Println("HookOverhead = GiteaPush - BarePush (time spent in Gitea hook handlers)")
-		fmt.Println()
+		t.Log("")
+		t.Log("GiteaPush = total wall time of tmpRepo.Push (triggers pre-receive + post-receive hooks)")
+		t.Log("BarePush  = direct git push to bare repo with hooks disabled (pure git transfer cost)")
+		t.Log("CPU(*)    = process CPU time consumed during that operation")
+		t.Log("HookOverhead = GiteaPush - BarePush (time spent in Gitea hook handlers)")
+		t.Log("")
 	})
 }
 
@@ -373,10 +376,13 @@ func measurePushBare(t testing.TB, repo *repo_model.Repository) (wall, cpu time.
 	headCommit := gitRun("rev-parse", "refs/heads/"+headRef)
 
 	cmd = exec.Command("git", "commit-tree", newTree, "-p", headCommit, "-m", "bare push bench")
-	cmd.Env = append(env,
+	bareCommitEnv := make([]string, len(env), len(env)+4)
+	copy(bareCommitEnv, env)
+	bareCommitEnv = append(bareCommitEnv,
 		"GIT_AUTHOR_NAME=bench", "GIT_AUTHOR_EMAIL=bench@test.local",
 		"GIT_COMMITTER_NAME=bench", "GIT_COMMITTER_EMAIL=bench@test.local",
 	)
+	cmd.Env = bareCommitEnv
 	commitOut, err := cmd.Output()
 	require.NoError(t, err, "commit-tree failed")
 	newCommit := strings.TrimSpace(string(commitOut))
@@ -394,10 +400,14 @@ func measurePushBare(t testing.TB, repo *repo_model.Repository) (wall, cpu time.
 	return wall, cpu
 }
 
+func timevalToNs(tv syscall.Timeval) int64 {
+	return int64(tv.Sec)*1e9 + int64(tv.Usec)*1e3 //nolint:unconvert // Sec is int32 on darwin, int64 on linux
+}
+
 func rusageCPUDiff(start, end syscall.Rusage) time.Duration {
-	userDiff := (end.Utime.Sec-start.Utime.Sec)*1e9 + int64(end.Utime.Usec-start.Utime.Usec)*1e3
-	sysDiff := (end.Stime.Sec-start.Stime.Sec)*1e9 + int64(end.Stime.Usec-start.Stime.Usec)*1e3
-	return time.Duration(userDiff + sysDiff)
+	user := timevalToNs(end.Utime) - timevalToNs(start.Utime)
+	sys := timevalToNs(end.Stime) - timevalToNs(start.Stime)
+	return time.Duration(user + sys)
 }
 
 // ---------------------------------------------------------------------------
@@ -414,11 +424,11 @@ func TestChangeRepoFilesCPU(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== ChangeRepoFiles Wall vs CPU Time ===")
-		fmt.Printf("%-8s  %12s  %12s  %12s\n",
+		t.Log("")
+		t.Log("=== ChangeRepoFiles Wall vs CPU Time ===")
+		t.Logf("%-8s  %12s  %12s  %12s",
 			"Files", "Wall", "CPU", "CPU%")
-		fmt.Printf("%-8s  %12s  %12s  %12s\n",
+		t.Logf("%-8s  %12s  %12s  %12s",
 			"--------", "------------", "------------", "------------")
 
 		for _, n := range fileCounts {
@@ -455,13 +465,13 @@ func TestChangeRepoFilesCPU(t *testing.T) {
 				cpuPct = float64(cpu) / float64(wall) * 100
 			}
 
-			fmt.Printf("%-8d  %10dms  %10dms  %10.1f%%\n",
+			t.Logf("%-8d  %10dms  %10dms  %10.1f%%",
 				n, wall.Milliseconds(), cpu.Milliseconds(), cpuPct)
 		}
 
-		fmt.Println()
-		fmt.Println("CPU% > 100% means multi-core usage. Low CPU% means I/O or subprocess wait.")
-		fmt.Println()
+		t.Log("")
+		t.Log("CPU% > 100% means multi-core usage. Low CPU% means I/O or subprocess wait.")
+		t.Log("")
 	})
 }
 
@@ -485,13 +495,13 @@ func TestPostReceiveSyncCost(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== Post-Receive Sync Cost Breakdown ===")
-		fmt.Println("Measures each synchronous operation that blocks git push in production.")
-		fmt.Println()
-		fmt.Printf("%-8s  %14s  %14s  %14s  %14s\n",
+		t.Log("")
+		t.Log("=== Post-Receive Sync Cost Breakdown ===")
+		t.Log("Measures each synchronous operation that blocks git push in production.")
+		t.Log("")
+		t.Logf("%-8s  %14s  %14s  %14s  %14s",
 			"Files", "update-srv-info", "SyncBranch", "SubprocessOH", "TotalSyncBlock")
-		fmt.Printf("%-8s  %14s  %14s  %14s  %14s\n",
+		t.Logf("%-8s  %14s  %14s  %14s  %14s",
 			"--------", "--------------", "--------------", "--------------", "--------------")
 
 		for _, n := range fileCounts {
@@ -527,7 +537,9 @@ func TestPostReceiveSyncCost(t *testing.T) {
 			envBase := append(os.Environ(), "GIT_INDEX_FILE="+idxFile, "GIT_DIR="+bareRepoPath)
 			gitRunE := func(extraEnv []string, args ...string) string {
 				c := exec.Command("git", args...)
-				c.Env = append(envBase, extraEnv...)
+				c.Env = make([]string, 0, len(envBase)+len(extraEnv))
+				c.Env = append(c.Env, envBase...)
+				c.Env = append(c.Env, extraEnv...)
 				o, e := c.CombinedOutput()
 				require.NoError(t, e, "git %v: %s", args, o)
 				return strings.TrimSpace(string(o))
@@ -568,7 +580,7 @@ func TestPostReceiveSyncCost(t *testing.T) {
 			// For simplicity, use the internal push time directly as subprocess overhead estimate
 			totalSync := updateInfoDur + syncDur + subDur
 
-			fmt.Printf("%-8d  %12dms  %12dms  %12dms  %12dms\n",
+			t.Logf("%-8d  %12dms  %12dms  %12dms  %12dms",
 				n,
 				updateInfoDur.Milliseconds(),
 				syncDur.Milliseconds(),
@@ -577,12 +589,12 @@ func TestPostReceiveSyncCost(t *testing.T) {
 			)
 		}
 
-		fmt.Println()
-		fmt.Println("update-srv-info = git update-server-info (scans pack files, runs in post-receive)")
-		fmt.Println("SyncBranch      = SyncBranchesToDB (sync operation in post-receive handler)")
-		fmt.Println("SubprocessOH    = total time for internal push (includes 3x gitea process start)")
-		fmt.Println("TotalSyncBlock  = estimated production push blocking time (excluding async queue)")
-		fmt.Println()
+		t.Log("")
+		t.Log("update-srv-info = git update-server-info (scans pack files, runs in post-receive)")
+		t.Log("SyncBranch      = SyncBranchesToDB (sync operation in post-receive handler)")
+		t.Log("SubprocessOH    = total time for internal push (includes 3x gitea process start)")
+		t.Log("TotalSyncBlock  = estimated production push blocking time (excluding async queue)")
+		t.Log("")
 	})
 }
 
@@ -600,11 +612,11 @@ func TestPushInternalVsNormal(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== Push: Normal (hooks) vs Internal (no hooks) ===")
-		fmt.Printf("%-8s  %14s  %14s  %14s\n",
+		t.Log("")
+		t.Log("=== Push: Normal (hooks) vs Internal (no hooks) ===")
+		t.Logf("%-8s  %14s  %14s  %14s",
 			"Files", "NormalPush", "InternalPush", "Speedup")
-		fmt.Printf("%-8s  %14s  %14s  %14s\n",
+		t.Logf("%-8s  %14s  %14s  %14s",
 			"--------", "--------------", "--------------", "--------------")
 
 		for _, n := range fileCounts {
@@ -615,14 +627,14 @@ func TestPushInternalVsNormal(t *testing.T) {
 			internalDur := measurePushInternal(t, repoInternal, user)
 
 			speedup := float64(normalDur) / float64(internalDur)
-			fmt.Printf("%-8d  %12dms  %12dms  %12.1fx\n",
+			t.Logf("%-8d  %12dms  %12dms  %12.1fx",
 				n, normalDur.Milliseconds(), internalDur.Milliseconds(), speedup)
 		}
 
-		fmt.Println()
-		fmt.Println("InternalPush uses GITEA_INTERNAL_PUSH=true, which skips pre-receive,")
-		fmt.Println("update, and post-receive hooks (including git update-server-info).")
-		fmt.Println()
+		t.Log("")
+		t.Log("InternalPush uses GITEA_INTERNAL_PUSH=true, which skips pre-receive,")
+		t.Log("update, and post-receive hooks (including git update-server-info).")
+		t.Log("")
 	})
 }
 
@@ -682,7 +694,9 @@ func measurePushInternal(t testing.TB, repo *repo_model.Repository, doer *user_m
 
 	gitRunEnv := func(extraEnv []string, args ...string) string {
 		cmd := exec.Command("git", args...)
-		cmd.Env = append(env, extraEnv...)
+		cmd.Env = make([]string, 0, len(env)+len(extraEnv))
+		cmd.Env = append(cmd.Env, env...)
+		cmd.Env = append(cmd.Env, extraEnv...)
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v failed: %s", args, out)
 		return strings.TrimSpace(string(out))
@@ -705,8 +719,10 @@ func measurePushInternal(t testing.TB, repo *repo_model.Repository, doer *user_m
 	headCommit := gitRun("rev-parse", "refs/heads/"+headRef)
 
 	newCommit := gitRunEnv(
-		[]string{"GIT_AUTHOR_NAME=bench", "GIT_AUTHOR_EMAIL=bench@test.local",
-			"GIT_COMMITTER_NAME=bench", "GIT_COMMITTER_EMAIL=bench@test.local"},
+		[]string{
+			"GIT_AUTHOR_NAME=bench", "GIT_AUTHOR_EMAIL=bench@test.local",
+			"GIT_COMMITTER_NAME=bench", "GIT_COMMITTER_EMAIL=bench@test.local",
+		},
 		"commit-tree", newTree, "-p", headCommit, "-m", "internal push bench",
 	)
 
@@ -750,11 +766,11 @@ func TestOptimizedVsNormalCreateFile(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 
-		fmt.Println()
-		fmt.Println("=== Optimized vs Normal ChangeRepoFiles ===")
-		fmt.Printf("%-8s  %14s  %14s  %14s  %10s\n",
+		t.Log("")
+		t.Log("=== Optimized vs Normal ChangeRepoFiles ===")
+		t.Logf("%-8s  %14s  %14s  %14s  %10s",
 			"Files", "Normal", "Optimized", "Speedup", "Correct?")
-		fmt.Printf("%-8s  %14s  %14s  %14s  %10s\n",
+		t.Logf("%-8s  %14s  %14s  %14s  %10s",
 			"--------", "--------------", "--------------", "--------------", "----------")
 
 		for _, n := range fileCounts {
@@ -818,11 +834,11 @@ func TestOptimizedVsNormalCreateFile(t *testing.T) {
 			}
 
 			speedup := float64(normalDur) / float64(optDur)
-			fmt.Printf("%-8d  %12dms  %12dms  %12.1fx  %10s\n",
+			t.Logf("%-8d  %12dms  %12dms  %12.1fx  %10s",
 				n, normalDur.Milliseconds(), optDur.Milliseconds(), speedup, correctStr)
 		}
 
-		fmt.Println()
+		t.Log("")
 	})
 }
 
@@ -947,55 +963,56 @@ func TestQPSComparison(t *testing.T) {
 		const repoFiles = 2000 // repo size
 		const opsPerTest = 5   // operations per test case
 
-		fmt.Println()
-		fmt.Println("=== QPS & CPU Comparison: Normal vs Optimized (repo=2000 files) ===")
-		fmt.Println()
+		t.Log("")
+		t.Log("=== QPS & CPU Comparison: Normal vs Optimized (repo=2000 files) ===")
+		t.Log("")
 
 		// --- Sequential test (concurrency=1) ---
-		fmt.Println("--- Sequential (concurrency=1) ---")
-		fmt.Printf("%-12s  %8s  %8s  %8s  %8s  %10s\n",
+		t.Log("--- Sequential (concurrency=1) ---")
+		t.Logf("%-12s  %8s  %8s  %8s  %8s  %10s",
 			"Mode", "Ops", "Total", "Avg/op", "QPS", "CPU%")
-		fmt.Printf("%-12s  %8s  %8s  %8s  %8s  %10s\n",
+		t.Logf("%-12s  %8s  %8s  %8s  %8s  %10s",
 			"------------", "--------", "--------", "--------", "--------", "----------")
 
 		// Normal sequential
 		repoNS := createTestRepo(t, user, "qps-normal-seq", repoFiles)
 		nsWall, nsCPU := runSequentialOps(t, repoNS, user, opsPerTest, false)
-		printQPSRow("Normal", opsPerTest, nsWall, nsCPU)
+		printQPSRow(t, "Normal", opsPerTest, nsWall, nsCPU)
 
 		// Optimized sequential
 		repoOS := createTestRepo(t, user, "qps-opt-seq", repoFiles)
 		osWall, osCPU := runSequentialOps(t, repoOS, user, opsPerTest, true)
-		printQPSRow("Optimized", opsPerTest, osWall, osCPU)
+		printQPSRow(t, "Optimized", opsPerTest, osWall, osCPU)
 
-		fmt.Println()
+		t.Log("")
 
 		// --- Concurrent test (multiple repos, parallel workers) ---
 		for _, concurrency := range []int{2, 4, 8} {
-			fmt.Printf("--- Concurrent (concurrency=%d, %d ops each) ---\n", concurrency, opsPerTest)
-			fmt.Printf("%-12s  %8s  %8s  %8s  %8s  %10s\n",
+			t.Logf("--- Concurrent (concurrency=%d, %d ops each) ---", concurrency, opsPerTest)
+			t.Logf("%-12s  %8s  %8s  %8s  %8s  %10s",
 				"Mode", "TotalOps", "Wall", "Avg/op", "QPS", "CPU%")
-			fmt.Printf("%-12s  %8s  %8s  %8s  %8s  %10s\n",
+			t.Logf("%-12s  %8s  %8s  %8s  %8s  %10s",
 				"------------", "--------", "--------", "--------", "--------", "----------")
 
 			// Normal concurrent
 			ncWall, ncCPU := runConcurrentOps(t, user, concurrency, opsPerTest, repoFiles, "qps-nc", false)
-			printQPSRow("Normal", concurrency*opsPerTest, ncWall, ncCPU)
+			printQPSRow(t, "Normal", concurrency*opsPerTest, ncWall, ncCPU)
 
 			// Optimized concurrent
 			ocWall, ocCPU := runConcurrentOps(t, user, concurrency, opsPerTest, repoFiles, "qps-oc", true)
-			printQPSRow("Optimized", concurrency*opsPerTest, ocWall, ocCPU)
+			printQPSRow(t, "Optimized", concurrency*opsPerTest, ocWall, ocCPU)
 
-			fmt.Println()
+			t.Log("")
 		}
 	})
 }
 
-func printQPSRow(mode string, ops int, wall, cpu time.Duration) {
+func printQPSRow(t testing.TB, mode string, ops int, wall, cpu time.Duration) {
+	t.Helper()
 	avgOp := wall / time.Duration(ops)
 	qps := float64(ops) / wall.Seconds()
 	cpuPct := float64(cpu) / float64(wall) * 100
-	fmt.Printf("%-12s  %8d  %6dms  %6dms  %8.2f  %8.1f%%\n",
+	t.Logf("%-12s  %8d  %6dms  %6dms  %8.2f  %8.1f%%",
 		mode, ops, wall.Milliseconds(), avgOp.Milliseconds(), qps, cpuPct)
 }
 
@@ -1006,7 +1023,7 @@ func runSequentialOps(t testing.TB, repo *repo_model.Repository, doer *user_mode
 	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &cpuStart)
 	wallStart := time.Now()
 
-	for i := 0; i < ops; i++ {
+	for i := range ops {
 		treePath := fmt.Sprintf("qps-seq/file-%d.txt", i)
 		if optimized {
 			res := optimizedCreateFile(t, repo, doer, treePath, fmt.Sprintf("content-%d", i))
@@ -1031,7 +1048,7 @@ func runSequentialOps(t testing.TB, repo *repo_model.Repository, doer *user_mode
 	wall = time.Since(wallStart)
 	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &cpuEnd)
 	cpu = rusageCPUDiff(cpuStart, cpuEnd)
-	return
+	return wall, cpu
 }
 
 func runConcurrentOps(t testing.TB, doer *user_model.User, concurrency, opsPerWorker, repoFiles int, prefix string, optimized bool) (wall, cpu time.Duration) {
@@ -1039,7 +1056,7 @@ func runConcurrentOps(t testing.TB, doer *user_model.User, concurrency, opsPerWo
 
 	// Create one repo per worker (concurrent pushes to same branch would conflict)
 	repos := make([]*repo_model.Repository, concurrency)
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		tag := "n"
 		if optimized {
 			tag = "o"
@@ -1054,12 +1071,12 @@ func runConcurrentOps(t testing.TB, doer *user_model.User, concurrency, opsPerWo
 	var wg sync.WaitGroup
 	errCh := make(chan error, concurrency*opsPerWorker)
 
-	for w := 0; w < concurrency; w++ {
+	for w := range concurrency {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 			repo := repos[workerID]
-			for i := 0; i < opsPerWorker; i++ {
+			for i := range opsPerWorker {
 				treePath := fmt.Sprintf("qps-conc/w%d-file-%d.txt", workerID, i)
 				if optimized {
 					res := optimizedCreateFile(t, repo, doer, treePath, fmt.Sprintf("c-%d-%d", workerID, i))
@@ -1092,7 +1109,7 @@ func runConcurrentOps(t testing.TB, doer *user_model.User, concurrency, opsPerWo
 	for err := range errCh {
 		t.Error(err)
 	}
-	return
+	return wall, cpu
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,41 +1133,41 @@ func TestHighConcurrency(t *testing.T) {
 		const poolSize = 10 // number of repos in the pool
 
 		// Pre-create repo pool
-		fmt.Println()
-		fmt.Printf("=== High Concurrency Test (pool=%d repos × %d files) ===\n", poolSize, repoFiles)
-		fmt.Println("Creating repo pool...")
+		t.Log("")
+		t.Logf("=== High Concurrency Test (pool=%d repos × %d files) ===", poolSize, repoFiles)
+		t.Log("Creating repo pool...")
 		reposNormal := make([]*repo_model.Repository, poolSize)
 		reposOpt := make([]*repo_model.Repository, poolSize)
-		for i := 0; i < poolSize; i++ {
+		for i := range poolSize {
 			reposNormal[i] = createTestRepo(t, user, fmt.Sprintf("hc-normal-%d", i), repoFiles)
 			reposOpt[i] = createTestRepo(t, user, fmt.Sprintf("hc-opt-%d", i), repoFiles)
 		}
-		fmt.Println("Pool ready.")
-		fmt.Println()
+		t.Log("Pool ready.")
+		t.Log("")
 
 		concurrencyLevels := []int{1, 5, 10, 20, 50, 100}
 
-		fmt.Printf("%-6s  %-10s  %8s  %8s  %8s  %8s  %8s  %8s  %8s\n",
+		t.Logf("%-6s  %-10s  %8s  %8s  %8s  %8s  %8s  %8s  %8s",
 			"Conc", "Mode", "Total", "OK", "Fail", "QPS", "AvgLat", "P99Lat", "CPU%")
-		fmt.Printf("%-6s  %-10s  %8s  %8s  %8s  %8s  %8s  %8s  %8s\n",
+		t.Logf("%-6s  %-10s  %8s  %8s  %8s  %8s  %8s  %8s  %8s",
 			"------", "----------", "--------", "--------", "--------", "--------", "--------", "--------", "--------")
 
 		for _, conc := range concurrencyLevels {
 			// Normal
 			nStats := runHighConcLoad(t, user, reposNormal, conc, false)
-			printConcRow(conc, "Normal", nStats)
+			printConcRow(t, conc, "Normal", nStats)
 
 			// Optimized
 			oStats := runHighConcLoad(t, user, reposOpt, conc, true)
-			printConcRow(conc, "Optimized", oStats)
+			printConcRow(t, conc, "Optimized", oStats)
 		}
 
-		fmt.Println()
-		fmt.Println("Conc = number of concurrent goroutines submitting requests simultaneously")
-		fmt.Println("Each goroutine does 1 file create operation")
-		fmt.Println("QPS = successful operations / wall time")
-		fmt.Println("NOTE: SQLite single-writer lock serializes DB writes, limiting max QPS")
-		fmt.Println()
+		t.Log("")
+		t.Log("Conc = number of concurrent goroutines submitting requests simultaneously")
+		t.Log("Each goroutine does 1 file create operation")
+		t.Log("QPS = successful operations / wall time")
+		t.Log("NOTE: SQLite single-writer lock serializes DB writes, limiting max QPS")
+		t.Log("")
 	})
 }
 
@@ -1164,7 +1181,8 @@ type concStats struct {
 	latP99 time.Duration
 }
 
-func printConcRow(conc int, mode string, s concStats) {
+func printConcRow(t testing.TB, conc int, mode string, s concStats) {
+	t.Helper()
 	qps := float64(0)
 	if s.wall > 0 {
 		qps = float64(s.ok) / s.wall.Seconds()
@@ -1173,7 +1191,7 @@ func printConcRow(conc int, mode string, s concStats) {
 	if s.wall > 0 {
 		cpuPct = float64(s.cpu) / float64(s.wall) * 100
 	}
-	fmt.Printf("%-6d  %-10s  %8d  %8d  %8d  %8.2f  %6dms  %6dms  %6.1f%%\n",
+	t.Logf("%-6d  %-10s  %8d  %8d  %8d  %8.2f  %6dms  %6dms  %6.1f%%",
 		conc, mode, s.total, s.ok, s.fail, qps,
 		s.latP50.Milliseconds(), s.latP99.Milliseconds(), cpuPct)
 }
@@ -1193,7 +1211,7 @@ func runHighConcLoad(t testing.TB, doer *user_model.User, repos []*repo_model.Re
 	var wg sync.WaitGroup
 	wallStart := time.Now()
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -1339,7 +1357,7 @@ func optimizedCreateFileOnBranch(t testing.TB, repo *repo_model.Repository, doer
 	}
 	pull_service.UpdatePullsRefs(ctx, repo, pushOpts)
 
-	go repo_service.PushUpdates([]*repo_module.PushUpdateOptions{pushOpts}) //nolint:errcheck
+	go repo_service.PushUpdates([]*repo_module.PushUpdateOptions{pushOpts})
 
 	// Verify file
 	newCommit, err := gitRepo.GetCommit(commitHash)

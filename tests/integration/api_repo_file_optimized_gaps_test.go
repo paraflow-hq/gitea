@@ -63,7 +63,7 @@ func TestOptimizedGapAnalysis(t *testing.T) {
 			issueN = reloadIssue(t, issueN.ID)
 			issueO = reloadIssue(t, issueO.ID)
 
-			fmt.Printf("  IssueAutoClose: normal_closed=%v optimized_closed=%v\n", issueN.IsClosed, issueO.IsClosed)
+			t.Logf("  IssueAutoClose: normal_closed=%v optimized_closed=%v", issueN.IsClosed, issueO.IsClosed)
 			assert.Equal(t, issueN.IsClosed, issueO.IsClosed,
 				"issue auto-close should match")
 		})
@@ -97,7 +97,7 @@ func TestOptimizedGapAnalysis(t *testing.T) {
 			normalHasPush := hasEventType(normalTasks, "push")
 			optHasPush := hasEventType(optTasks, "push")
 
-			fmt.Printf("  WebhookPushEvent: normal=%v(%d tasks) optimized=%v(%d tasks)\n",
+			t.Logf("  WebhookPushEvent: normal=%v(%d tasks) optimized=%v(%d tasks)",
 				normalHasPush, len(normalTasks), optHasPush, len(optTasks))
 			assert.Equal(t, normalHasPush, optHasPush, "webhook push events should match")
 		})
@@ -128,7 +128,7 @@ func TestOptimizedGapAnalysis(t *testing.T) {
 			newN := countActionsByType(t, repoN.ID, activities_model.ActionCommitRepo) - beforeN
 			newO := countActionsByType(t, repoO.ID, activities_model.ActionCommitRepo) - beforeO
 
-			fmt.Printf("  ActivityFeed: normal_new=%d optimized_new=%d\n", newN, newO)
+			t.Logf("  ActivityFeed: normal_new=%d optimized_new=%d", newN, newO)
 			assert.Equal(t, newN, newO, "ActionCommitRepo count should match")
 		})
 
@@ -152,7 +152,7 @@ func TestOptimizedGapAnalysis(t *testing.T) {
 			_, err := os.Stat(markerFile)
 			executed := err == nil
 
-			fmt.Printf("  CustomPreReceiveHook: executed=%v\n", executed)
+			t.Logf("  CustomPreReceiveHook: executed=%v", executed)
 			assert.True(t, executed,
 				"Custom pre-receive hook should still execute with InternalPushingEnvironment")
 		})
@@ -192,12 +192,12 @@ func TestOptimizedGapAnalysis(t *testing.T) {
 			normalGrew := repoN.Size > sizeBeforeN
 			optGrew := repoO.Size > sizeBeforeO
 
-			fmt.Printf("  RepoSizeUpdate: normal_grew=%v(%d→%d) optimized_grew=%v(%d→%d)\n",
+			t.Logf("  RepoSizeUpdate: normal_grew=%v(%d→%d) optimized_grew=%v(%d→%d)",
 				normalGrew, sizeBeforeN, repoN.Size, optGrew, sizeBeforeO, repoO.Size)
 			assert.Equal(t, normalGrew, optGrew, "repo size update behavior should match")
 		})
 
-		fmt.Println()
+		t.Log("")
 	})
 }
 

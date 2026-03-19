@@ -5,7 +5,6 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -107,7 +106,7 @@ func TestOptimizedPushRegression(t *testing.T) {
 			assert.Greater(t, normalAfter.repoUpdatedUnix, normalBefore.repoUpdatedUnix, "normal: repo updated_unix should change")
 			assert.Greater(t, optAfter.repoUpdatedUnix, optBefore.repoUpdatedUnix, "optimized: repo updated_unix should change")
 
-			fmt.Println("  CreateFile: PASS (git, branch DB, activity, webhook, repo timestamp)")
+			t.Log("  CreateFile: PASS (git, branch DB, activity, webhook, repo timestamp)")
 		})
 
 		// ============================================================
@@ -143,7 +142,7 @@ func TestOptimizedPushRegression(t *testing.T) {
 			verifyFileInGit(t, repoN, newBranch, "branch-test.txt", "normal")
 			verifyFileInGit(t, repoO, newBranch, "branch-test.txt", "optimized")
 
-			fmt.Println("  CreateFileNewBranch: PASS (branch exists in DB and git)")
+			t.Log("  CreateFileNewBranch: PASS (branch exists in DB and git)")
 		})
 
 		// ============================================================
@@ -190,7 +189,7 @@ func TestOptimizedPushRegression(t *testing.T) {
 			assert.NotEqual(t, optSHA, newOptSHA, "optimized: SHA should change after update")
 			assert.Equal(t, newNormalSHA, newOptSHA, "updated SHA should match between normal and optimized")
 
-			fmt.Println("  UpdateFile: PASS (SHA updated, content matches)")
+			t.Log("  UpdateFile: PASS (SHA updated, content matches)")
 		})
 
 		// ============================================================
@@ -231,7 +230,7 @@ func TestOptimizedPushRegression(t *testing.T) {
 			verifyFileNotInGit(t, repoN, repoN.DefaultBranch, treePath, "normal")
 			verifyFileNotInGit(t, repoO, repoO.DefaultBranch, treePath, "optimized")
 
-			fmt.Println("  DeleteFile: PASS (file removed from both)")
+			t.Log("  DeleteFile: PASS (file removed from both)")
 		})
 
 		// ============================================================
@@ -269,11 +268,11 @@ func TestOptimizedPushRegression(t *testing.T) {
 				verifyFileInGit(t, repoO, repoO.DefaultBranch, path, "optimized")
 			}
 
-			fmt.Println("  BatchCreateFiles: PASS (3 files created in both)")
+			t.Log("  BatchCreateFiles: PASS (3 files created in both)")
 		})
 
-		fmt.Println()
-		fmt.Println("=== All Regression Tests PASSED ===")
+		t.Log("")
+		t.Log("=== All Regression Tests PASSED ===")
 	})
 }
 
