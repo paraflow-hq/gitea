@@ -378,6 +378,27 @@ func (t *TemporaryUploadRepository) Push(ctx context.Context, doer *user_model.U
 	return nil
 }
 
+// PushInternalSkipHooks pushes with GITEA_INTERNAL_PUSH=true so that the
+// gitea pre-receive/update/post-receive hook handlers exit early.
+// Callers MUST handle side effects (SyncBranchesToDB, PushUpdates, etc.) themselves.
+func (t *TemporaryUploadRepository) PushInternalSkipHooks(ctx context.Context, doer *user_model.User, commitHash, branch string, force bool) error {
+	env := repo_module.InternalPushingEnvironment(doer, t.repo)
+	if err := gitrepo.PushFromLocal(ctx, t.basePath, t.repo, git.PushOptions{
+		Branch: strings.TrimSpace(commitHash) + ":" + git.BranchPrefix + strings.TrimSpace(branch),
+		Env:    env,
+		Force:  force,
+	}); err != nil {
+		if git.IsErrPushOutOfDate(err) {
+			return err
+		} else if git.IsErrPushRejected(err) {
+			return err
+		}
+		return fmt.Errorf("unable to push (internal) from temporary repo: %s (%s) Error: %w",
+			t.repo.FullName(), t.basePath, err)
+	}
+	return nil
+}
+
 // DiffIndex returns a Diff of the current index to the head
 func (t *TemporaryUploadRepository) DiffIndex(ctx context.Context) (*gitdiff.Diff, error) {
 	stdoutReader, stdoutWriter, err := os.Pipe()
