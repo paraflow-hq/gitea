@@ -357,34 +357,34 @@ type optResult struct {
 
 func runOptimizedCreate(t testing.TB, repo *repo_model.Repository, doer *user_model.User, branch, treePath, content, msg string) optResult {
 	t.Helper()
-	return runOptimizedOp(t, repo, doer, branch, msg, func(tmp *files_service.TemporaryUploadRepository) error {
+	return runOptimizedOp(t, repo, doer, branch, msg, func(tmp *files_service.TemporaryUploadRepository) (string, error) {
 		h, err := tmp.HashObjectAndWrite(context.TODO(), strings.NewReader(content))
 		if err != nil {
-			return err
+			return "", err
 		}
-		return tmp.AddObjectToIndex(context.TODO(), "100644", h, treePath)
+		return h, tmp.AddObjectToIndex(context.TODO(), "100644", h, treePath)
 	})
 }
 
 func runOptimizedUpdate(t testing.TB, repo *repo_model.Repository, doer *user_model.User, treePath, content, msg string) optResult {
 	t.Helper()
-	return runOptimizedOp(t, repo, doer, repo.DefaultBranch, msg, func(tmp *files_service.TemporaryUploadRepository) error {
+	return runOptimizedOp(t, repo, doer, repo.DefaultBranch, msg, func(tmp *files_service.TemporaryUploadRepository) (string, error) {
 		h, err := tmp.HashObjectAndWrite(context.TODO(), strings.NewReader(content))
 		if err != nil {
-			return err
+			return "", err
 		}
-		return tmp.AddObjectToIndex(context.TODO(), "100644", h, treePath)
+		return h, tmp.AddObjectToIndex(context.TODO(), "100644", h, treePath)
 	})
 }
 
 func runOptimizedDelete(t testing.TB, repo *repo_model.Repository, doer *user_model.User, treePath, msg string) optResult {
 	t.Helper()
-	return runOptimizedOp(t, repo, doer, repo.DefaultBranch, msg, func(tmp *files_service.TemporaryUploadRepository) error {
-		return tmp.RemoveFilesFromIndex(context.TODO(), treePath)
+	return runOptimizedOp(t, repo, doer, repo.DefaultBranch, msg, func(tmp *files_service.TemporaryUploadRepository) (string, error) {
+		return "", tmp.RemoveFilesFromIndex(context.TODO(), treePath)
 	})
 }
 
-func runOptimizedOp(t testing.TB, repo *repo_model.Repository, doer *user_model.User, targetBranch, msg string, modifyIndex func(*files_service.TemporaryUploadRepository) error) optResult {
+func runOptimizedOp(t testing.TB, repo *repo_model.Repository, doer *user_model.User, targetBranch, msg string, modifyIndex func(*files_service.TemporaryUploadRepository) (string, error)) optResult {
 	t.Helper()
 	ctx := context.TODO()
 	var result optResult
@@ -396,7 +396,9 @@ func runOptimizedOp(t testing.TB, repo *repo_model.Repository, doer *user_model.
 
 	require.NoError(t, tmp.Clone(ctx, repo.DefaultBranch, true))
 	require.NoError(t, tmp.SetDefaultIndex(ctx))
-	require.NoError(t, modifyIndex(tmp))
+	blobSHA, err := modifyIndex(tmp)
+	require.NoError(t, err)
+	result.fileSHA = blobSHA
 
 	treeHash, err := tmp.WriteTree(ctx)
 	require.NoError(t, err)
@@ -441,15 +443,6 @@ func runOptimizedOp(t testing.TB, repo *repo_model.Repository, doer *user_model.
 	if c, err := gitRepo.GetCommit(commitHash); err == nil {
 		result.fileReadable = c != nil
 	}
-	result.fileSHA, _ = func() (string, error) {
-		c, err := gitRepo.GetCommit(commitHash)
-		if err != nil {
-			return "", err
-		}
-		// Get the blob SHA of any file added (first file in tree diff)
-		_ = c
-		return commitHash, nil // use commit hash as proxy; SHA check is in the test
-	}()
 
 	<-done // wait for correctness
 	return result
