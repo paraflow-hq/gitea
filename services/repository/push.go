@@ -50,6 +50,32 @@ func initPushQueue() error {
 		return errors.New("unable to create push_update queue")
 	}
 	go graceful.GetManager().RunWithCancel(pushQueue)
+
+	// Register the post-push handler for direct (non-hook) push paths.
+	// This replaces what the post-receive hook handler would have done.
+	repo_module.PostPushUpdates = func(ctx context.Context, opts *repo_module.PushUpdateOptions) error {
+		repo, err := repo_model.GetRepositoryByOwnerAndName(ctx, opts.RepoUserName, opts.RepoName)
+		if err != nil {
+			return fmt.Errorf("PostPushUpdates: GetRepository: %w", err)
+		}
+		gitRepo, err := gitrepo.OpenRepository(ctx, repo)
+		if err != nil {
+			return fmt.Errorf("PostPushUpdates: OpenRepository: %w", err)
+		}
+		defer gitRepo.Close()
+
+		if opts.RefFullName.IsBranch() {
+			if err := SyncBranchesToDB(ctx, repo.ID, opts.PusherID,
+				[]string{opts.RefFullName.BranchName()},
+				[]string{opts.NewCommitID},
+				gitRepo.GetCommit); err != nil {
+				log.Error("PostPushUpdates: SyncBranchesToDB: %v", err)
+			}
+			pull_service.UpdatePullsRefs(ctx, repo, opts)
+		}
+		return PushUpdates([]*repo_module.PushUpdateOptions{opts})
+	}
+
 	return nil
 }
 

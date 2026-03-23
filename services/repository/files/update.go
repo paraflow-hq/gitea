@@ -21,6 +21,7 @@ import (
 	"code.gitea.io/gitea/modules/gitrepo"
 	"code.gitea.io/gitea/modules/lfs"
 	"code.gitea.io/gitea/modules/log"
+	repo_module "code.gitea.io/gitea/modules/repository"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/util"
@@ -337,6 +338,27 @@ func ChangeRepoFiles(ctx context.Context, repo *repo_model.Repository, doer *use
 		if err := t.UpdateRef(ctx, commitHash, opts.NewBranch, oldRef); err != nil {
 			log.Error("UpdateRef: %v", err)
 			return nil, err
+		}
+
+		// Handle post-push side effects (webhooks, activity, issue auto-close, etc.)
+		// that would normally be triggered by git hooks in the Push() path.
+		if repo_module.PostPushUpdates != nil {
+			objectFormat := git.ObjectFormatFromName(repo.ObjectFormatName)
+			pushOpts := &repo_module.PushUpdateOptions{
+				RefFullName:  git.RefNameFromBranch(opts.NewBranch),
+				OldCommitID:  opts.LastCommitID,
+				NewCommitID:  commitHash,
+				PusherID:     doer.ID,
+				PusherName:   doer.Name,
+				RepoUserName: repo.OwnerName,
+				RepoName:     repo.Name,
+			}
+			if pushOpts.OldCommitID == "" {
+				pushOpts.OldCommitID = objectFormat.EmptyObjectID().String()
+			}
+			if err := repo_module.PostPushUpdates(ctx, pushOpts); err != nil {
+				log.Error("PostPushUpdates: %v", err)
+			}
 		}
 	}
 

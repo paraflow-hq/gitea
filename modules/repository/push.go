@@ -4,8 +4,16 @@
 package repository
 
 import (
+	"context"
+
 	"code.gitea.io/gitea/modules/git"
 )
+
+// PostPushUpdates is set by services/repository at init time to handle
+// post-push side effects (webhooks, activity, indexer, etc.).
+// This indirection avoids an import cycle between services/repository and
+// services/repository/files.
+var PostPushUpdates func(ctx context.Context, opts *PushUpdateOptions) error
 
 // PushUpdateOptions defines the push update options
 type PushUpdateOptions struct {
