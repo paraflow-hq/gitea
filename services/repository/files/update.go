@@ -186,28 +186,45 @@ func ChangeRepoFiles(ctx context.Context, repo *repo_model.Repository, doer *use
 
 	message := strings.TrimSpace(opts.Message)
 
-	t, err := NewTemporaryUploadRepository(repo)
-	if err != nil {
-		log.Error("NewTemporaryUploadRepository failed: %v", err)
-	}
-	defer t.Close()
+	// Use direct repo access (no clone, no push) for better performance.
+	// Falls back to clone-based flow for empty repos or when LFS is enabled
+	// (LFS attribute detection requires a proper working directory).
+	canUseDirect := !repo.IsEmpty && !setting.LFS.StartServer
+	var t *TemporaryUploadRepository
 	hasOldBranch := true
-	if err := t.Clone(ctx, opts.OldBranch, true); err != nil {
-		for _, file := range opts.Files {
-			if file.Operation == "delete" {
+	if !canUseDirect {
+		t, err = NewTemporaryUploadRepository(repo)
+		if err != nil {
+			return nil, err
+		}
+		defer t.Close()
+		if err := t.Clone(ctx, opts.OldBranch, true); err != nil {
+			for _, file := range opts.Files {
+				if file.Operation == "delete" {
+					return nil, err
+				}
+			}
+			if !git.IsErrBranchNotExist(err) || !repo.IsEmpty {
+				return nil, err
+			}
+			if err := t.Init(ctx, repo.ObjectFormatName); err != nil {
+				return nil, err
+			}
+			hasOldBranch = false
+			opts.LastCommitID = ""
+		}
+		if hasOldBranch {
+			if err := t.SetDefaultIndex(ctx); err != nil {
 				return nil, err
 			}
 		}
-		if !git.IsErrBranchNotExist(err) || !repo.IsEmpty {
+	} else {
+		// Non-empty repo: operate directly on the bare repo with a temp index
+		t, err = NewDirectRepoRef(repo)
+		if err != nil {
 			return nil, err
 		}
-		if err := t.Init(ctx, repo.ObjectFormatName); err != nil {
-			return nil, err
-		}
-		hasOldBranch = false
-		opts.LastCommitID = ""
-	}
-	if hasOldBranch {
+		defer t.Close()
 		if err := t.SetDefaultIndex(ctx); err != nil {
 			return nil, err
 		}
@@ -302,10 +319,22 @@ func ChangeRepoFiles(ctx context.Context, repo *repo_model.Repository, doer *use
 		return nil, err
 	}
 
-	// Then push this tree to NewBranch
-	if err := t.Push(ctx, doer, commitHash, opts.NewBranch); err != nil {
-		log.Error("%T %v", err, err)
-		return nil, err
+	// Finalize: either update-ref (direct mode) or push (clone mode)
+	if !canUseDirect {
+		if err := t.Push(ctx, doer, commitHash, opts.NewBranch); err != nil {
+			log.Error("%T %v", err, err)
+			return nil, err
+		}
+	} else {
+		// For new branches, don't pass oldCommitID (ref doesn't exist yet)
+		oldRef := opts.LastCommitID
+		if opts.NewBranch != opts.OldBranch {
+			oldRef = ""
+		}
+		if err := t.UpdateRef(ctx, commitHash, opts.NewBranch, oldRef); err != nil {
+			log.Error("UpdateRef: %v", err)
+			return nil, err
+		}
 	}
 
 	commit, err := t.GetCommit(commitHash)
