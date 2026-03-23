@@ -50,6 +50,8 @@ func initPushQueue() error {
 		return errors.New("unable to create push_update queue")
 	}
 	go graceful.GetManager().RunWithCancel(pushQueue)
+	repo_module.PushUpdatesFunc = PushUpdates
+	repo_module.SyncBranchesToDBFunc = SyncBranchesToDB
 	return nil
 }
 
