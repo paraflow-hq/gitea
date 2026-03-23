@@ -383,8 +383,7 @@ func (t *TemporaryUploadRepository) Push(ctx context.Context, doer *user_model.U
 // Callers MUST handle side effects (SyncBranchesToDB, PushUpdates, etc.) themselves.
 func (t *TemporaryUploadRepository) PushInternalSkipHooks(ctx context.Context, doer *user_model.User, commitHash, branch string, force bool) error {
 	env := repo_module.InternalPushingEnvironment(doer, t.repo)
-	if err := git.Push(ctx, t.basePath, git.PushOptions{
-		Remote: t.repo.RepoPath(),
+	if err := gitrepo.PushFromLocal(ctx, t.basePath, t.repo, git.PushOptions{
 		Branch: strings.TrimSpace(commitHash) + ":" + git.BranchPrefix + strings.TrimSpace(branch),
 		Env:    env,
 		Force:  force,

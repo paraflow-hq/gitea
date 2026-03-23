@@ -4,17 +4,7 @@
 package repository
 
 import (
-	"context"
-
 	"code.gitea.io/gitea/modules/git"
-)
-
-// These function variables are set by services/repository at init time.
-// This indirection breaks the import cycle between services/repository and
-// services/repository/files.
-var (
-	PushUpdatesFunc      func(opts []*PushUpdateOptions) error
-	SyncBranchesToDBFunc func(ctx context.Context, repoID, pusherID int64, branchNames, commitIDs []string, getCommit func(commitID string) (*git.Commit, error)) error
 )
 
 // PushUpdateOptions defines the push update options

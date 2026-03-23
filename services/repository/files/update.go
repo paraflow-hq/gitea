@@ -20,7 +20,6 @@ import (
 	"code.gitea.io/gitea/modules/gitrepo"
 	"code.gitea.io/gitea/modules/lfs"
 	"code.gitea.io/gitea/modules/log"
-	repo_module "code.gitea.io/gitea/modules/repository"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/util"
@@ -303,34 +302,10 @@ func ChangeRepoFiles(ctx context.Context, repo *repo_model.Repository, doer *use
 		return nil, err
 	}
 
-	// Push with internal env to skip gitea hook subprocesses (~300ms savings per call).
-	// Side effects (branch sync, webhooks, notifications) are called directly below.
-	if err := t.PushInternalSkipHooks(ctx, doer, commitHash, opts.NewBranch, false); err != nil {
+	// Then push this tree to NewBranch
+	if err := t.Push(ctx, doer, commitHash, opts.NewBranch); err != nil {
 		log.Error("%T %v", err, err)
 		return nil, err
-	}
-
-	// Manually handle what post-receive hook would have done:
-	if repo_module.SyncBranchesToDBFunc != nil {
-		if err := repo_module.SyncBranchesToDBFunc(ctx, repo.ID, doer.ID,
-			[]string{opts.NewBranch}, []string{commitHash}, gitRepo.GetCommit); err != nil {
-			log.Error("SyncBranchesToDB: %v", err)
-		}
-	}
-	pushUpdateOpts := &repo_module.PushUpdateOptions{
-		RefFullName:  git.RefNameFromBranch(opts.NewBranch),
-		OldCommitID:  opts.LastCommitID,
-		NewCommitID:  commitHash,
-		PusherID:     doer.ID,
-		PusherName:   doer.Name,
-		RepoUserName: repo.OwnerName,
-		RepoName:     repo.Name,
-	}
-	pull_service.UpdatePullsRefs(ctx, repo, pushUpdateOpts)
-	if repo_module.PushUpdatesFunc != nil {
-		if err := repo_module.PushUpdatesFunc([]*repo_module.PushUpdateOptions{pushUpdateOpts}); err != nil {
-			log.Error("PushUpdates: %v", err)
-		}
 	}
 
 	commit, err := t.GetCommit(commitHash)
